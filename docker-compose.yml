@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:6.0
+    container_name: ecotracker-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_DATABASE: ecotracker
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./backend/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    networks:
+      - ecotracker-network
+
+  # Backend API
+  backend:
+    build: ./backend
+    container_name: ecotracker-backend
+    restart: unless-stopped
+    environment:
+      - MONGODB_URI=mongodb://admin:password123@mongodb:27017/ecotracker?authSource=admin
+      - JWT_SECRET_KEY=your-super-secret-jwt-key-change-in-production
+      - FLASK_ENV=production
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+    ports:
+      - "5000:5000"
+    depends_on:
+      - mongodb
+    volumes:
+      - ./backend/models:/app/models
+    networks:
+      - ecotracker-network
+
+  # Frontend
+  frontend:
+    build: ./frontend
+    container_name: ecotracker-frontend
+    restart: unless-stopped
+    environment:
+      - REACT_APP_API_URL=http://localhost:5000
+      - REACT_APP_GOOGLE_MAPS_KEY=${REACT_APP_GOOGLE_MAPS_KEY}
+      - REACT_APP_CLOUDINARY_CLOUD_NAME=${REACT_APP_CLOUDINARY_CLOUD_NAME}
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - ecotracker-network
+
+  # Redis (for caching and sessions)
+  redis:
+    image: redis:7-alpine
+    container_name: ecotracker-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - ecotracker-network
+
+volumes:
+  mongodb_data:
+  redis_data:
+
+networks:
+  ecotracker-network:
+    driver: bridge
